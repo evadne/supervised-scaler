@@ -1,0 +1,7 @@
+<div class="jumbotron">
+  <form action="/previews" method="post" enctype="multipart/form-data">
+    <input type="file" name="image">
+    <input type="hidden" name="_csrf_token" value="<%= get_csrf_token() %>">
+    <input class="btn btn-primary" type="submit" value="Submit">
+  </form>
+</div>

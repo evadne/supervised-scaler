@@ -1,0 +1,2 @@
+<h3><%= @diff %></h3>
+<img src="data:image/png;base64,<%= @base64 %>" width="512" height="auto" />
