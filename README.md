@@ -21,7 +21,7 @@ This project is considered alpha quality and should not yet be used in productio
 
 ![Solution Layout](doc/layout.png)
 
-To be brief, the C API for libVIPS is used and a C program listens on STDIN for image resampling requests. Each request uses a full line with a line break at the end, which is incidentally also the unit of work read in by the C program. The program then attempts to locate the file, resize it, allocate a temporary file path and write the output into that path. Once done the program emits the path via STDOUT; in case of any error exactly one message will be logged via STDERR.
+To be brief, the C API for libVIPS is used and a [C program](deps_local/resampler/c_src/convert.c) listens on STDIN for image resampling requests. Each request uses a full line with a line break at the end, which is incidentally also the unit of work read in by the C program. The program then attempts to locate the file, resize it, allocate a temporary file path and write the output into that path. Once done the program emits the path via STDOUT; in case of any error exactly one message will be logged via STDERR.
 
 This C program is then run under [erlexec](https://github.com/saleyn/erlexec) from a GenServer and that is further mediated by [poolboy](https://github.com/devinus/poolboy). I then configure `erlexec` to use `run_link` so any sort of segmentation fault or other unsavoury business in the C program simply causes the entire thing to die and be replaced with another fresh worker by poolboy.
 
@@ -41,7 +41,7 @@ I believe that this is the most straightforward solution to deliver a solution t
 
 1.  Grab the local dependency `resampler` from `deps_local`. (Note: once we have a proper entry in the package manager this will change.)
 2.  Make sure you have `Resampler.Pool` as part of your application’s supervision tree.
-3.  Use the library as usual: ``{:ok, file_path} = Resampler.request(path, maxWidth, maxHeight)`.
+3.  Use the library as usual: `{:ok, file_path} = Resampler.request(path, maxWidth, maxHeight)`.
 
 ## Help needed?
 
