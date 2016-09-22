@@ -1,9 +1,13 @@
 # Supervised Scaler
 
-The Supervised Scaler is an Elixir/Phoenix project made to support [my lightning talk](https://www.icloud.com/keynote/0-4TNF2RqhabO9t6GIfgV3djw) at [Elixir London 2016](). It is laid out thusly:
+The Supervised Scaler is an Elixir/Phoenix project made to support [my lightning talk](https://www.icloud.com/keynote/0-4TNF2RqhabO9t6GIfgV3djw) at [Elixir London 2016](http://www.elixir.london). It is laid out thusly:
 
 1.  A simple Phoenix application, `scaler`, which generates thumbnails using a local dependency.
 2.  The local dependency, `resampler` which contains an Elixir wrapper around a C server, which calls libVIPS.
+
+## High Level Structure
+
+![Solution Layout](doc/layout.png)
 
 ## How to run the app
 
