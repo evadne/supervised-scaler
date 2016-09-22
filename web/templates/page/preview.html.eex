@@ -1,2 +1,12 @@
-<h3><%= @diff %></h3>
-<img src="data:image/png;base64,<%= @base64 %>" width="512" height="auto" />
+<div class="row-fluid">
+  <div class="col-sm-6">
+    <h2>libVIPS + STDIN/STDOUT/STDERR</h2>
+    <h3><%= @resampler_diff %></h3>
+    <img src="data:image/png;base64,<%= @resampler_base64 %>" width="512" height="auto" />
+  </div>
+  <div class="col-sm-6">
+    <h2>Morgify (ImageMagick) + Process Forking</h2>
+    <h3><%= @mogrify_diff %></h3>
+    <img src="data:image/png;base64,<%= @mogrify_base64 %>" width="512" height="auto" />
+  </div>
+</div>

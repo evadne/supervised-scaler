@@ -37,7 +37,8 @@ defmodule Scaler.Mixfile do
       {:phoenix_live_reload, "~> 1.0", only: :dev},
       {:gettext, "~> 0.11"},
       {:cowboy, "~> 1.0"},
-      {:resampler, path: "deps_local/resampler"}
+      {:resampler, path: "deps_local/resampler"},
+      {:mogrify, "~> 0.4.0"}      
    ]
   end
 end
