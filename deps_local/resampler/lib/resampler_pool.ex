@@ -13,7 +13,15 @@ defmodule Resampler.Pool do
 
   def request(fromPath, toWidth, toHeight) do
     :poolboy.transaction(:resampler_pool, fn (worker) ->
-      GenServer.call(worker, {:resample, fromPath, toWidth, toHeight})
+      try do
+        GenServer.call(worker, {:resample, fromPath, toWidth, toHeight}, 100000) # fixme: timeout should be configurable and exposed
+      catch :exit, reason ->
+        Process.exit(worker, :kill)
+        case reason do
+          {:timeout, _} -> {:error, :timeout}
+          _ -> {:error, :unknown}
+        end
+      end
     end)
   end
 

@@ -1,12 +1,27 @@
 <div class="row-fluid">
   <div class="col-sm-6">
     <h2>libVIPS + STDIN/STDOUT/STDERR</h2>
-    <h3><%= @resampler_diff %></h3>
-    <img src="data:image/png;base64,<%= @resampler_base64 %>" width="512" height="auto" />
+    <%= if assigns[:resampler_diff] do %>
+      <h3><%= assigns[:resampler_diff] %></h3>
+    <% end %>
+    <%= if assigns[:resampler_error] do %>
+      error!
+      <%= assigns[:resampler_error] %>
+    <% end %>
+    <%= if assigns[:resampler_base64] do %>
+      <img src="data:image/png;base64,<%= assigns[:resampler_base64] %>" width="512" height="auto" />
+    <% end %>
   </div>
   <div class="col-sm-6">
     <h2>ImageMagick + Process Forking</h2>
-    <h3><%= @mogrify_diff %></h3>
-    <img src="data:image/png;base64,<%= @mogrify_base64 %>" width="512" height="auto" />
+    <%= if assigns[:mogrify_diff] do %>
+      <h3><%= assigns[:mogrify_diff] %></h3>
+    <% end %>    
+    <%= if assigns[:mogrify_error] do %>
+      <%= assigns[:mogrify_error] %>
+    <% end %>
+    <%= if assigns[:mogrify_base64] do %>
+      <img src="data:image/png;base64,<%= assigns[:mogrify_base64] %>" width="512" height="auto" />
+    <% end %>
   </div>
 </div>
