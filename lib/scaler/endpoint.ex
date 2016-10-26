@@ -26,6 +26,7 @@ defmodule Scaler.Endpoint do
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
     json_decoder: Poison,
+    read_timeout: 1000 * 3600, # allow an hour’s worth of uploading in the worst case.
     length: 1048576 * 1024 # allow 1GB test files.
 
   plug Plug.MethodOverride
