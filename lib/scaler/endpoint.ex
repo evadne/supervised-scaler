@@ -25,7 +25,8 @@ defmodule Scaler.Endpoint do
   plug Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
     pass: ["*/*"],
-    json_decoder: Poison
+    json_decoder: Poison,
+    length: 1048576 * 1024 # allow 1GB test files.
 
   plug Plug.MethodOverride
   plug Plug.Head
