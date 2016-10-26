@@ -47,7 +47,6 @@ void process (char *lineBuffer) {
   // If file can not be opened, fail via STDERR.
   //
   VipsImage *fromImage;
-  // printf("fromFilePath %s", fromFilePath);
   if (!(fromImage = vips_image_new_from_file(fromFilePath, NULL))) {
     fprintf(stderr, "ERROR - Unable to open file\n");
     return;
