@@ -29,8 +29,6 @@ defmodule Resampler.Worker do
         else
           {:reply, {:ok, String.strip(message)}, state}
         end
-      x ->
-        IO.inspect x
     after 1000 * 5 ->
       {:reply, {:error, :timeout}, state}
     end
