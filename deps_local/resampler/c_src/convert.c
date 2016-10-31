@@ -113,8 +113,8 @@ bool shouldImportColourProfileForImage (VipsImage *image) {
   
   if (LINEAR_PROCESSING || (fromInterpretation == VIPS_INTERPRETATION_CMYK)) {
     if (fromCoding == VIPS_CODING_NONE) {
-  		if ((fromBandFormat == VIPS_FORMAT_UCHAR) || (fromBandFormat == VIPS_FORMAT_USHORT)) {
-  		  if (vips_image_get_typeof(image, VIPS_META_ICC_NAME)) {
+      if ((fromBandFormat == VIPS_FORMAT_UCHAR) || (fromBandFormat == VIPS_FORMAT_USHORT)) {
+        if (vips_image_get_typeof(image, VIPS_META_ICC_NAME)) {
           return true;
         }
       }
@@ -195,15 +195,15 @@ VipsImage *newThumbnailImageFromImage (VipsObject *context, VipsImage *parentIma
   
   if (shouldConvertToProcessingColourSpaceForImage(currentImage)) {
     VipsImage *convertedImage = NULL;
-  	if (vips_colourspace(currentImage, &convertedImage, PROCESSING_COLOUR_SPACE, NULL)) {
-  	  return NULL;
-  	}
+    if (vips_colourspace(currentImage, &convertedImage, PROCESSING_COLOUR_SPACE, NULL)) {
+      return NULL;
+    }
     currentImage = localImages[2] = convertedImage;
   }
   
   if (shouldPremultiplyImage(currentImage)) {
     imageBandFormatBeforePremultiplication = vips_image_get_format(currentImage);
-		VipsImage *premultipliedImage = NULL;
+    VipsImage *premultipliedImage = NULL;
     if (vips_premultiply(currentImage, &premultipliedImage, NULL)) {
       return NULL;
     }
@@ -212,9 +212,9 @@ VipsImage *newThumbnailImageFromImage (VipsObject *context, VipsImage *parentIma
   }
   
   VipsImage *resizedImage = NULL;
-	if (vips_resize(currentImage, &resizedImage, (1.0 / shrinkFactor), NULL)) {
-	  return NULL;
-	}
+  if (vips_resize(currentImage, &resizedImage, (1.0 / shrinkFactor), NULL)) {
+    return NULL;
+  }
   currentImage = localImages[4] = resizedImage;
   
   if (havePremultiplied) {
@@ -240,8 +240,8 @@ VipsImage *newThumbnailImageFromImage (VipsObject *context, VipsImage *parentIma
   }
   
   if (vips_image_get_typeof(currentImage, VIPS_META_ICC_NAME)) {
-		if (!vips_image_remove(currentImage, VIPS_META_ICC_NAME)) { 
-			return NULL;
+    if (!vips_image_remove(currentImage, VIPS_META_ICC_NAME)) { 
+      return NULL;
     }
   }
   
@@ -336,7 +336,7 @@ int main (int argc, char **argv) {
     //
     VipsObject *context = VIPS_OBJECT(vips_image_new()); 
     processLine(lineBuffer, context);
-		vips_error_clear();
+    vips_error_clear();
     g_object_unref(context);
     
     //
