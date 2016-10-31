@@ -1,3 +1,8 @@
+// 
+// VIPS Resampler (C Server).
+// Portions from VIPS Thumbnailer, https://github.com/jcupitt/libvips/blob/master/tools/vipsthumbnail.c
+// 
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
