@@ -212,7 +212,7 @@ VipsImage *newThumbnailImageFromImage (VipsObject *context, VipsImage *parentIma
   }
   
   VipsImage *resizedImage = NULL;
-  if (vips_resize(currentImage, &resizedImage, (1.0 / shrinkFactor), NULL)) {
+  if (vips_resize(currentImage, &resizedImage, (1.0 / shrinkFactor), "centre", TRUE, NULL)) {
     return NULL;
   }
   currentImage = localImages[4] = resizedImage;
