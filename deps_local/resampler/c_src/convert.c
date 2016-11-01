@@ -307,7 +307,20 @@ VipsImage *newThumbnailFromImage (VipsObject *context, VipsImage *parentImage, V
   }
   
   //
-  // 09 § Strip colour profile, if needed; let devices fall back to sRGB
+  // 09 § Rotate image, if needed
+  //
+  if (angle != VIPS_ANGLE_D0) {
+    VipsImage *copiedImage = localImages[8] = vips_image_new_memory();
+    VipsImage *rotatedImage = NULL;
+    if (vips_image_write(currentImage, copiedImage) || vips_rot(copiedImage, &rotatedImage, angle, NULL)) {
+      return NULL;
+    }
+    currentImage = localImages[9] = rotatedImage;
+		vips_autorot_remove_angle(currentImage);
+  }
+  
+  //
+  // 10 § Strip colour profile, if needed; let devices fall back to sRGB
   //
   if (vips_image_get_typeof(currentImage, VIPS_META_ICC_NAME)) {
     if (!vips_image_remove(currentImage, VIPS_META_ICC_NAME)) { 
