@@ -52,14 +52,14 @@ unsigned int jpegShrinkFactorForFactor (double shrinkFactor) {
   }
 }
 
-void computeImageShrinkFactorAndAngle (VipsImage *image, unsigned int toWidth, unsigned int toHeight, double *outShrinkFactor, VipsAngle *outAngle) {
+void getImageShrinkFactorAndAngle (VipsImage *image, unsigned int toWidth, unsigned int toHeight, double *outShrinkFactor, VipsAngle *outAngle) {
   *outAngle = vips_autorot_get_angle(image);
   *outShrinkFactor = shrinkFactorForImage(image, *outAngle, toWidth, toHeight);
 }
 
 VipsImage * newImageFromGenericPath (char *filePath, unsigned int toWidth, unsigned int toHeight, double *outShrinkFactor, VipsAngle *outAngle) {
   VipsImage *loadedImage = vips_image_new_from_file(filePath, "access", VIPS_ACCESS_SEQUENTIAL, NULL);
-  computeImageShrinkFactorAndAngle(loadedImage, toWidth, toHeight, outShrinkFactor, outAngle);
+  getImageShrinkFactorAndAngle(loadedImage, toWidth, toHeight, outShrinkFactor, outAngle);
   return loadedImage;
 }
 
@@ -68,7 +68,7 @@ VipsImage * newImageFromJPEGPath (char *filePath, unsigned int toWidth, unsigned
   g_object_unref(headerImage);
   
   VipsImage *loadedImage = vips_image_new_from_file(filePath, "access", VIPS_ACCESS_SEQUENTIAL, "shrink", jpegShrinkFactorForFactor(*outShrinkFactor), NULL);
-  computeImageShrinkFactorAndAngle(loadedImage, toWidth, toHeight, outShrinkFactor, outAngle);
+  getImageShrinkFactorAndAngle(loadedImage, toWidth, toHeight, outShrinkFactor, outAngle);
   return loadedImage;
 }
 
@@ -77,7 +77,7 @@ VipsImage * newImageFromPDFPath (char *filePath, unsigned int toWidth, unsigned 
   g_object_unref(headerImage);
   
   VipsImage *loadedImage = vips_image_new_from_file(filePath, "access", VIPS_ACCESS_SEQUENTIAL, "scale", (1.0 / (*outShrinkFactor)), NULL);
-  computeImageShrinkFactorAndAngle(loadedImage, toWidth, toHeight, outShrinkFactor, outAngle);
+  getImageShrinkFactorAndAngle(loadedImage, toWidth, toHeight, outShrinkFactor, outAngle);
   return loadedImage;
 }
 
@@ -90,7 +90,7 @@ VipsImage * newImageFromWebPPath (char *filePath, unsigned int toWidth, unsigned
   g_object_unref(headerImage);
   
   VipsImage *loadedImage = vips_image_new_from_file(filePath, "access", VIPS_ACCESS_SEQUENTIAL, "shrink", *outShrinkFactor, NULL);
-  computeImageShrinkFactorAndAngle(loadedImage, toWidth, toHeight, outShrinkFactor, outAngle);
+  getImageShrinkFactorAndAngle(loadedImage, toWidth, toHeight, outShrinkFactor, outAngle);
   return loadedImage;
 }
 
@@ -129,7 +129,7 @@ bool shouldImportColourProfileForImage (VipsImage *image) {
   return false;
 }
 
-bool shouldConvertToProcessingColourSpaceForImage (VipsImage *image) {
+bool shouldConvertImageToProcessingColourSpace (VipsImage *image) {
   const VipsInterpretation fromInterpretation = vips_image_get_interpretation(image);
   const VipsInterpretation toInterpretation = PROCESSING_COLOUR_SPACE;
   
@@ -161,7 +161,7 @@ bool shouldPremultiplyImage (VipsImage *image) {
   return false;
 }
 
-bool shouldConvertToExportingColourSpaceForImage (VipsImage *image) {
+bool shouldConvertImageToExportingColourSpace (VipsImage *image) {
   VipsInterpretation const fromInterpretation = vips_image_get_interpretation(image);
   VipsInterpretation const toInterpretation = EXPORTING_COLOUR_SPACE;
   
@@ -172,7 +172,7 @@ bool shouldConvertToExportingColourSpaceForImage (VipsImage *image) {
   }
 }
 
-VipsImage *newThumbnailImageFromImage (VipsObject *context, VipsImage *parentImage, VipsAngle angle, double shrinkFactor) {
+VipsImage *newThumbnailFromImage (VipsObject *context, VipsImage *parentImage, VipsAngle angle, double shrinkFactor) {
   VipsImage **localImages = (VipsImage **)vips_object_local_array(context, 10);
   VipsImage *currentImage = parentImage;
   
@@ -198,7 +198,7 @@ VipsImage *newThumbnailImageFromImage (VipsObject *context, VipsImage *parentIma
     currentImage = localImages[1] = importedImage;
   }
   
-  if (shouldConvertToProcessingColourSpaceForImage(currentImage)) {
+  if (shouldConvertImageToProcessingColourSpace(currentImage)) {
     VipsImage *convertedImage = NULL;
     if (vips_colourspace(currentImage, &convertedImage, PROCESSING_COLOUR_SPACE, NULL)) {
       return NULL;
@@ -236,7 +236,7 @@ VipsImage *newThumbnailImageFromImage (VipsObject *context, VipsImage *parentIma
     currentImage = localImages[6] = unpremultipliedImage;
   }
   
-  if (shouldConvertToExportingColourSpaceForImage(currentImage)) {
+  if (shouldConvertImageToExportingColourSpace(currentImage)) {
     VipsImage *exportedImage = NULL;
     if (vips_colourspace(currentImage, &exportedImage, EXPORTING_COLOUR_SPACE, NULL)) {
       return NULL;
@@ -304,7 +304,7 @@ void processLine (char *lineBuffer, VipsObject *context) {
   }
   vips_object_local(context, fromImage);
   
-  VipsImage *thumbnailImage = newThumbnailImageFromImage(context, fromImage, fromAngle, shrinkFactor);
+  VipsImage *thumbnailImage = newThumbnailFromImage(context, fromImage, fromAngle, shrinkFactor);
   if (!thumbnailImage) {
     fprintf(stderr, "ERROR - Unable to resize image\n");
     return;
