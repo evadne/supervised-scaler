@@ -191,6 +191,9 @@ bool shouldPremultiplyImage (VipsImage *image) {
   // but really the function should be able to tell whether the image has an alpha channel
   // in order to return a proper answer. So we’re winging it at the moment.
   //
+  // Note: libVIPS 8.5.0 (started 13 October 2016) has added vips_image_hasalpha()
+  // so that may be quite useful.
+  //
   const int fromNumberOfBands = vips_image_get_bands(image);
   
   if (fromNumberOfBands == 2) {
