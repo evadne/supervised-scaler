@@ -82,6 +82,9 @@ VipsImage * newImageFromPDFPath (char *filePath, unsigned int toWidth, unsigned 
 }
 
 VipsImage * newImageFromSVGPath (char *filePath, unsigned int toWidth, unsigned int toHeight, double *outShrinkFactor, VipsAngle *outAngle) {
+  //
+  // Same underlying code path as PDF loading.
+  //
   return newImageFromPDFPath(filePath, toWidth, toHeight, outShrinkFactor, outAngle);
 }
 
@@ -96,19 +99,28 @@ VipsImage * newImageFromWebPPath (char *filePath, unsigned int toWidth, unsigned
 
 VipsImage * newImageFromPath (char *filePath, unsigned int toWidth, unsigned int toHeight, double *outShrinkFactor, VipsAngle *outAngle) {
   const char *loaderName = vips_foreign_find_load(filePath);
+  
   if (!loaderName) {
     return NULL;
-  } else if (0 == strcmp(loaderName, "VipsForeignLoadJpegFile")) {
-    return newImageFromJPEGPath(filePath, toWidth, toHeight, outShrinkFactor, outAngle);
-  } else if (0 == strcmp(loaderName, "VipsForeignLoadPdfFile")) {
-    return newImageFromPDFPath(filePath, toWidth, toHeight, outShrinkFactor, outAngle);
-  } else if (0 == strcmp(loaderName, "VipsForeignLoadSvgFile")) {
-    return newImageFromSVGPath(filePath, toWidth, toHeight, outShrinkFactor, outAngle);
-  } else if (0 == strcmp(loaderName, "VipsForeignLoadWebpFile")) {
-    return newImageFromWebPPath(filePath, toWidth, toHeight, outShrinkFactor, outAngle);
-  } else {
-    return newImageFromGenericPath(filePath, toWidth, toHeight, outShrinkFactor, outAngle);
   }
+  
+  if (0 == strcmp(loaderName, "VipsForeignLoadJpegFile")) {
+    return newImageFromJPEGPath(filePath, toWidth, toHeight, outShrinkFactor, outAngle);
+  }
+  
+  if (0 == strcmp(loaderName, "VipsForeignLoadPdfFile")) {
+    return newImageFromPDFPath(filePath, toWidth, toHeight, outShrinkFactor, outAngle);
+  }
+  
+  if (0 == strcmp(loaderName, "VipsForeignLoadSvgFile")) {
+    return newImageFromSVGPath(filePath, toWidth, toHeight, outShrinkFactor, outAngle);
+  }
+  
+  if (0 == strcmp(loaderName, "VipsForeignLoadWebpFile")) {
+    return newImageFromWebPPath(filePath, toWidth, toHeight, outShrinkFactor, outAngle);
+  }
+  
+  return newImageFromGenericPath(filePath, toWidth, toHeight, outShrinkFactor, outAngle);
 }
 
 bool shouldImportColourProfileForImage (VipsImage *image) {
