@@ -14,9 +14,11 @@
 // § Definitions
 //
 
+// 
 // Linear vs. Perceptual. It would seem that linear vs. perceptual space is
 // not a concern, since this program’s output will be solely used in a browser
 // and not in further applications downstream.
+// 
 #define LINEAR_PROCESSING 0
 
 // 
@@ -25,6 +27,12 @@
 // 
 #define PROCESSING_COLOUR_SPACE (LINEAR_PROCESSING ? VIPS_INTERPRETATION_scRGB : VIPS_INTERPRETATION_sRGB)
 #define EXPORTING_COLOUR_SPACE VIPS_INTERPRETATION_sRGB
+
+// 
+// Template for the temporary file. Presumablty if the program is to be ported elsewhere
+// it will need to vary. Also it is plausible that the end user may want to customise this on their own as well
+// 
+#define TEMPORARY_FILE_PATH_TEMPLATE "/tmp/converter-XXXXXX.jpg"
 
 // 
 // Define whether memory can be used between passes. By default this means a 100MB high water mark
@@ -315,7 +323,7 @@ VipsImage *newThumbnailFromImage (VipsObject *context, VipsImage *parentImage, V
       return NULL;
     }
     currentImage = localImages[9] = rotatedImage;
-		vips_autorot_remove_angle(currentImage);
+    vips_autorot_remove_angle(currentImage);
   }
   
   //
@@ -340,7 +348,7 @@ char * pathWithWrittenDataForImage(VipsImage *image) {
   // add a path extension so libVIPS knows which format to use.
   // Note: in the future we should allow configuring the server for PNG, JPEG and perhaps WebM.
   //
-  static char * const fileTemplate = "/tmp/converter-XXXXXX.jpg";
+  static char * const fileTemplate = TEMPORARY_FILE_PATH_TEMPLATE;
   char *filePath = (char *)malloc(strlen(fileTemplate) + 1);
   strcpy(filePath, fileTemplate);
   
