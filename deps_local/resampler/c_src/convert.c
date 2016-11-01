@@ -11,28 +11,43 @@
 #include <vips/vips.h>
 #include <vips/vips.h>
 
+//
+// § Definitions
+//
+
 // Linear vs. Perceptual. It would seem that linear vs. perceptual space is
 // not a concern, since this program’s output will be solely used in a browser
 // and not in further applications downstream.
 #define LINEAR_PROCESSING 0
+
+// 
+// Processing / Exporting Colour Space. Currently the only use case is for Web so everything
+// gets exported in sRGB (if not already in that colour space).
+// 
 #define PROCESSING_COLOUR_SPACE (LINEAR_PROCESSING ? VIPS_INTERPRETATION_scRGB : VIPS_INTERPRETATION_sRGB)
 #define EXPORTING_COLOUR_SPACE VIPS_INTERPRETATION_sRGB
 
+// 
 // Define whether memory can be used between passes. By default this means a 100MB high water mark
 // within each pass and no cached information to persist between passes. In the future this can be made tweakable
 // since code can be deployed in many places. Also threading should be tweakable.
+// 
 #define CACHE_BYTES_ALLOWED_WITHIN_EACH_PASS 104857600
 #define CACHE_BYTES_ALLOWED_BETWEEN_EACH_PASS 0
 
-double shrinkFactorForImage (VipsImage *fromImage, VipsAngle fromAngle, unsigned int toWidth, unsigned int toHeight) {
-  unsigned int const fromWidth = vips_image_get_width(fromImage);
-  unsigned int const fromHeight = vips_image_get_height(fromImage);
+//
+// § Shrink Factor Calculation
+//
+
+double shrinkFactorForImage (VipsImage *fromImage, VipsAngle fromAngle, double toWidth, double toHeight) {
+  const double fromWidth = (double)vips_image_get_width(fromImage);
+  const double fromHeight = (double)vips_image_get_height(fromImage);
   switch (fromAngle) {
     case VIPS_ANGLE_D90:
     case VIPS_ANGLE_D270:
-      return fmin(((double)fromHeight / (double)toWidth), ((double)fromWidth / (double)toHeight));
+      return fmin((fromHeight / toWidth), (fromWidth / toHeight));
     default:
-      return fmin(((double)fromWidth / (double)toWidth), ((double)fromHeight / (double)toHeight));
+      return fmin((fromWidth / toWidth), (fromHeight / toHeight));
   }
 }
 
@@ -54,8 +69,12 @@ unsigned int jpegShrinkFactorForFactor (double shrinkFactor) {
 
 void getImageShrinkFactorAndAngle (VipsImage *image, unsigned int toWidth, unsigned int toHeight, double *outShrinkFactor, VipsAngle *outAngle) {
   *outAngle = vips_autorot_get_angle(image);
-  *outShrinkFactor = shrinkFactorForImage(image, *outAngle, toWidth, toHeight);
+  *outShrinkFactor = shrinkFactorForImage(image, *outAngle, (double)toWidth, (double)toHeight);
 }
+
+//
+// § Image Loading
+//
 
 VipsImage * newImageFromGenericPath (char *filePath, unsigned int toWidth, unsigned int toHeight, double *outShrinkFactor, VipsAngle *outAngle) {
   VipsImage *loadedImage = vips_image_new_from_file(filePath, "access", VIPS_ACCESS_SEQUENTIAL, NULL);
@@ -123,6 +142,10 @@ VipsImage * newImageFromPath (char *filePath, unsigned int toWidth, unsigned int
   return newImageFromGenericPath(filePath, toWidth, toHeight, outShrinkFactor, outAngle);
 }
 
+//
+// § Image Shrinking
+//
+
 bool shouldImportColourProfileForImage (VipsImage *image) {
   const VipsInterpretation fromInterpretation = vips_image_get_interpretation(image);
   const VipsCoding fromCoding = vips_image_get_coding(image);
@@ -153,6 +176,14 @@ bool shouldConvertImageToProcessingColourSpace (VipsImage *image) {
 }
 
 bool shouldPremultiplyImage (VipsImage *image) {
+  //
+  // Check whether the image has an alpha channel; if it does then it needs to be pre-multiplied
+  // before being shrunk, then un-premultiplied later after being shrunk.
+  //
+  // Note: VIPS Thumbnailer implements this in the same way by checking the number of bands
+  // but really the function should be able to tell whether the image has an alpha channel
+  // in order to return a proper answer. So we’re winging it at the moment.
+  //
   const int fromNumberOfBands = vips_image_get_bands(image);
   
   if (fromNumberOfBands == 2) {
@@ -174,8 +205,8 @@ bool shouldPremultiplyImage (VipsImage *image) {
 }
 
 bool shouldConvertImageToExportingColourSpace (VipsImage *image) {
-  VipsInterpretation const fromInterpretation = vips_image_get_interpretation(image);
-  VipsInterpretation const toInterpretation = EXPORTING_COLOUR_SPACE;
+  const VipsInterpretation fromInterpretation = vips_image_get_interpretation(image);
+  const VipsInterpretation toInterpretation = EXPORTING_COLOUR_SPACE;
   
   if (fromInterpretation != toInterpretation) {
     return true;
@@ -188,8 +219,11 @@ VipsImage *newThumbnailFromImage (VipsObject *context, VipsImage *parentImage, V
   VipsImage **localImages = (VipsImage **)vips_object_local_array(context, 10);
   VipsImage *currentImage = parentImage;
   
+  bool havePremultiplied = false;
+  VipsBandFormat imageBandFormatBeforePremultiplication = VIPS_FORMAT_NOTSET;
+  
   //
-  // Special unpacking for RAD
+  // 01 § Special unpacking for RAD
   //
   if (VIPS_CODING_RAD == vips_image_get_coding(currentImage)) {
     VipsImage *unpackedImage = NULL;
@@ -198,10 +232,10 @@ VipsImage *newThumbnailFromImage (VipsObject *context, VipsImage *parentImage, V
     }
     currentImage = localImages[0] = unpackedImage;
   }
-  
-  bool havePremultiplied = false;
-  VipsBandFormat imageBandFormatBeforePremultiplication = VIPS_FORMAT_NOTSET;
-  
+    
+  //
+  // 02 § Import colour profile, if needed
+  //
   if (shouldImportColourProfileForImage(currentImage)) {
     VipsImage *importedImage = NULL;
     if (vips_icc_import(currentImage, &importedImage, "embedded", TRUE, "pcs", VIPS_PCS_XYZ, NULL)) {
@@ -210,6 +244,9 @@ VipsImage *newThumbnailFromImage (VipsObject *context, VipsImage *parentImage, V
     currentImage = localImages[1] = importedImage;
   }
   
+  //
+  // 03 § Convert to device colour space, if needed
+  //
   if (shouldConvertImageToProcessingColourSpace(currentImage)) {
     VipsImage *convertedImage = NULL;
     if (vips_colourspace(currentImage, &convertedImage, PROCESSING_COLOUR_SPACE, NULL)) {
@@ -218,6 +255,9 @@ VipsImage *newThumbnailFromImage (VipsObject *context, VipsImage *parentImage, V
     currentImage = localImages[2] = convertedImage;
   }
   
+  //
+  // 04 § Premultiply image, if needed
+  //
   if (shouldPremultiplyImage(currentImage)) {
     imageBandFormatBeforePremultiplication = vips_image_get_format(currentImage);
     VipsImage *premultipliedImage = NULL;
@@ -228,12 +268,19 @@ VipsImage *newThumbnailFromImage (VipsObject *context, VipsImage *parentImage, V
     currentImage = localImages[3] = premultipliedImage;
   }
   
+  //
+  // 05 § Resize image
+  //
   VipsImage *resizedImage = NULL;
   if (vips_resize(currentImage, &resizedImage, (1.0 / shrinkFactor), "centre", TRUE, NULL)) {
     return NULL;
   }
   currentImage = localImages[4] = resizedImage;
   
+  //
+  // 06 § Unpremultiply image if premultiplied earlier
+  // 07 § Cast image back to original band format if premultiplied earlier
+  //
   if (havePremultiplied) {
     VipsImage *unpremultipliedImage = NULL;
     if (vips_unpremultiply(currentImage, &unpremultipliedImage, NULL)) {
@@ -248,6 +295,9 @@ VipsImage *newThumbnailFromImage (VipsObject *context, VipsImage *parentImage, V
     currentImage = localImages[6] = unpremultipliedImage;
   }
   
+  //
+  // 08 § Transform image back to exporting colour space, if needed
+  //
   if (shouldConvertImageToExportingColourSpace(currentImage)) {
     VipsImage *exportedImage = NULL;
     if (vips_colourspace(currentImage, &exportedImage, EXPORTING_COLOUR_SPACE, NULL)) {
@@ -256,6 +306,9 @@ VipsImage *newThumbnailFromImage (VipsObject *context, VipsImage *parentImage, V
     currentImage = localImages[7] = exportedImage;
   }
   
+  //
+  // 09 § Strip colour profile, if needed; let devices fall back to sRGB
+  //
   if (vips_image_get_typeof(currentImage, VIPS_META_ICC_NAME)) {
     if (!vips_image_remove(currentImage, VIPS_META_ICC_NAME)) { 
       return NULL;
@@ -264,6 +317,10 @@ VipsImage *newThumbnailFromImage (VipsObject *context, VipsImage *parentImage, V
   
   return currentImage;
 }
+
+//
+// § Saving
+//
 
 char * pathWithWrittenDataForImage(VipsImage *image) {
   //
@@ -291,9 +348,16 @@ char * pathWithWrittenDataForImage(VipsImage *image) {
   return filePath;
 }
 
+//
+// § Glue
+//
+
 void processLine (char *lineBuffer, VipsObject *context) {
   //
-  // Attempt to scan information from input string.
+  // Attempt to scan information from input string. Input must have the format of
+  // <toWidth> <toHeight> <fromPath> and is supposed to be using a path that is within
+  // a controlled temporary directory and a server-generated file name, instead of anywhere
+  // in the filesystem and/or an user-provided file name.
   //
   char fromFilePath[4096];
   unsigned int toWidth = 0;
@@ -304,8 +368,10 @@ void processLine (char *lineBuffer, VipsObject *context) {
   }
   
   //
-  // Try to open file.
-  // If file can not be opened, fail via STDERR.
+  // Try to open file; if shrink-on-load is supported load a smaller version immediately.
+  // otherwise, load the full version later but still compute angle and shrink factor.
+  //
+  // If file can not be opened, fail.
   //
   VipsAngle fromAngle = VIPS_ANGLE_D0;
   double shrinkFactor = 1.0;
@@ -316,6 +382,9 @@ void processLine (char *lineBuffer, VipsObject *context) {
   }
   vips_object_local(context, fromImage);
   
+  //
+  // The fun bit. Make thumbnail.
+  //
   VipsImage *thumbnailImage = newThumbnailFromImage(context, fromImage, fromAngle, shrinkFactor);
   if (!thumbnailImage) {
     fprintf(stderr, "ERROR - Unable to resize image\n");
@@ -344,12 +413,15 @@ int main (int argc, char **argv) {
   // Spin up an infinite loop to accept conversion requests from STDIN
   // with the format: <width> <height> <file path>.
   //
-  // Note: fgets blocks, without burning CPU
+  // Note: fgets blocks, without burning CPU. Looks like the best function on macOS;
+  // other ones burn CPU when idle.
   //
   char lineBuffer[4096];
   while (fgets(lineBuffer, 4096, stdin)) {
     //
-    // Start the main process loop again.
+    // Start the main process loop. Spin up a VipsObject in order for
+    // downstream functions to hang all dependent objects on this context object,
+    // so it can all be de-allocated in one go later on.
     //
     VipsObject *context = VIPS_OBJECT(vips_image_new()); 
     processLine(lineBuffer, context);
@@ -358,7 +430,8 @@ int main (int argc, char **argv) {
     
     //
     // Empty cache but allow a higher high water mark within each pass,
-    // if so desired.
+    // if so desired. By default this is set to 0MB and 100MB respectively
+    // but can be tweaked in the future.
     //
     vips_cache_set_max_mem(CACHE_BYTES_ALLOWED_BETWEEN_EACH_PASS);
     vips_cache_set_max_mem(CACHE_BYTES_ALLOWED_WITHIN_EACH_PASS);
