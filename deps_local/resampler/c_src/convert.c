@@ -9,7 +9,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <vips/vips.h>
-#include <vips/vips.h>
 
 //
 // § Definitions
