@@ -3,6 +3,8 @@
 // Portions from VIPS Thumbnailer, https://github.com/jcupitt/libvips/blob/master/tools/vipsthumbnail.c
 // 
 
+#define _BSD_SOURCE // for `mkstemps`
+#include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
