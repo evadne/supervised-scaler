@@ -49,14 +49,17 @@
 //
 
 double shrinkFactorForImage (VipsImage *fromImage, VipsAngle fromAngle, double toWidth, double toHeight) {
+  if ((toWidth == 0.0) && (toHeight == 0.0)) {
+    return 1.0;
+  }
   const double fromWidth = (double)vips_image_get_width(fromImage);
   const double fromHeight = (double)vips_image_get_height(fromImage);
   switch (fromAngle) {
     case VIPS_ANGLE_D90:
     case VIPS_ANGLE_D270:
-      return fmin((fromHeight / toWidth), (fromWidth / toHeight));
+      return fmax((fromHeight / toWidth), (fromWidth / toHeight));
     default:
-      return fmin((fromWidth / toWidth), (fromHeight / toHeight));
+      return fmax((fromWidth / toWidth), (fromHeight / toHeight));
   }
 }
 
@@ -283,11 +286,13 @@ VipsImage *newThumbnailFromImage (VipsObject *context, VipsImage *parentImage, V
   //
   // 05 § Resize image
   //
-  VipsImage *resizedImage = NULL;
-  if (vips_resize(currentImage, &resizedImage, (1.0 / shrinkFactor), "centre", TRUE, NULL)) {
-    return NULL;
+  if (shrinkFactor != 1.0) {
+    VipsImage *resizedImage = NULL;
+    if (vips_resize(currentImage, &resizedImage, (1.0 / shrinkFactor), "centre", TRUE, NULL)) {
+      return NULL;
+    }
+    currentImage = localImages[4] = resizedImage;
   }
-  currentImage = localImages[4] = resizedImage;
   
   //
   // 06 § Unpremultiply image if premultiplied earlier
@@ -366,7 +371,7 @@ char * pathWithWrittenDataForImage(VipsImage *image) {
   //
   // Save the file. Try to catch any sort of error if needed.
   //
-  if (0 != vips_image_write_to_file(image, filePath, "strip", TRUE, NULL)) {
+  if (0 != vips_image_write_to_file(image, filePath, "strip", TRUE, "interlace", TRUE, NULL)) {
     return NULL;
   }
   
@@ -419,6 +424,11 @@ void processLine (char *lineBuffer, VipsObject *context) {
   char *toFilePath = pathWithWrittenDataForImage(thumbnailImage);
   if (toFilePath) {
     printf("%s\n", toFilePath);
+    
+    // flush STDOUT immediately, so the application is not reliant on typical POSIX behaviour/
+    // see http://stackoverflow.com/questions/1716296/why-does-printf-not-flush-after-the-call-unless-a-newline-is-in-the-format-strin
+    fflush(stdout);
+    
     free(toFilePath);
   } else {
     fprintf(stderr, "ERROR - Unable to write file\n");
@@ -433,7 +443,7 @@ int main (int argc, char **argv) {
   if (VIPS_INIT(argv[0])) {
     vips_error_exit(NULL);
   }
-
+  
   //
   // Spin up an infinite loop to accept conversion requests from STDIN
   // with the format: <width> <height> <file path>.
