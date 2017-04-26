@@ -38,11 +38,22 @@
 
 // 
 // Define whether memory can be used between passes. By default this means a 100MB high water mark
-// within each pass and no cached information to persist between passes. In the future this can be made tweakable
-// since code can be deployed in many places. Also threading should be tweakable.
+// within each pass and a maximum of 1MB of cached information can persist between passes.
+// In the future this should be made tweakable, since code can be deployed in many places.
+// Also, threading factors should be tweakable.
 // 
 #define CACHE_BYTES_ALLOWED_WITHIN_EACH_PASS 104857600
 #define CACHE_BYTES_ALLOWED_BETWEEN_EACH_PASS 0
+
+//
+// Define how many files can be held in the operation cache; by default this is 0
+// as it is unlikely for a particular image to have things done to it repeatedly
+//
+#define CACHE_FILES_ALLOWED_WITHIN_EACH_PASS 0
+#define CACHE_FILES_ALLOWED_BETWEEN_EACH_PASS 0
+
+#define CACHE_OPS_ALLOWED_WITHIN_EACH_PASS 10
+#define CACHE_OPS_ALLOWED_BETWEEN_EACH_PASS 0
 
 //
 // § Shrink Factor Calculation
@@ -230,10 +241,8 @@ bool shouldConvertImageToExportingColourSpace (VipsImage *image) {
   }
 }
 
-VipsImage *newThumbnailFromImage (VipsObject *context, VipsImage *parentImage, VipsAngle angle, double shrinkFactor) {
-  VipsImage **localImages = (VipsImage **)vips_object_local_array(context, 10);
+VipsImage *newThumbnailFromImage (VipsImage **localImages, VipsImage *parentImage, VipsAngle angle, double shrinkFactor) {
   VipsImage *currentImage = parentImage;
-  
   bool havePremultiplied = false;
   VipsBandFormat imageBandFormatBeforePremultiplication = VIPS_FORMAT_NOTSET;
   
@@ -304,7 +313,6 @@ VipsImage *newThumbnailFromImage (VipsObject *context, VipsImage *parentImage, V
       return NULL;
     }
     currentImage = localImages[5] = unpremultipliedImage;
-    
     VipsImage *castImage = NULL;
     if (vips_cast(currentImage, &castImage, imageBandFormatBeforePremultiplication, NULL)) {
       return NULL;
@@ -361,12 +369,15 @@ char * pathWithWrittenDataForImage(VipsImage *image) {
   static char * const fileTemplate = TEMPORARY_FILE_PATH_TEMPLATE;
   char *filePath = (char *)malloc(strlen(fileTemplate) + 1);
   strcpy(filePath, fileTemplate);
-  
-  if (!(mkstemps(filePath, 4))) {
+  int fileDescriptor = mkstemps(filePath, 4);
+  if (!fileDescriptor) {
     fprintf(stderr, "ERROR - Unable to open exclusive temporary file\n");
     free(filePath);
     return NULL;
   }
+  
+  // Close file descriptor so as not to interfere with later writing
+  close(fileDescriptor);
   
   //
   // Save the file. Try to catch any sort of error if needed.
@@ -382,14 +393,14 @@ char * pathWithWrittenDataForImage(VipsImage *image) {
 // § Glue
 //
 
-void processLine (char *lineBuffer, VipsObject *context) {
+void processLine (char *lineBuffer) {
   //
   // Attempt to scan information from input string. Input must have the format of
   // <toWidth> <toHeight> <fromPath> and is supposed to be using a path that is within
   // a controlled temporary directory and a server-generated file name, instead of anywhere
   // in the filesystem and/or an user-provided file name.
   //
-  char fromFilePath[4096];
+  static char fromFilePath[4096];
   unsigned int toWidth = 0;
   unsigned int toHeight = 0;
   if (3 != sscanf(lineBuffer, "%u %u %[^\n]s", &toWidth, &toHeight, fromFilePath)) {
@@ -410,14 +421,24 @@ void processLine (char *lineBuffer, VipsObject *context) {
     fprintf(stderr, "ERROR - Unable to open file\n");
     return;
   }
-  vips_object_local(context, fromImage);
   
   //
   // The fun bit. Make thumbnail.
   //
-  VipsImage *thumbnailImage = newThumbnailFromImage(context, fromImage, fromAngle, shrinkFactor);
+  VipsObject *context = VIPS_OBJECT(vips_image_new());
+  
+  //
+  // Stick the original image onto the context,
+  // in case the incoming resample request is “0x0” which is simply a resave
+  //
+  vips_object_local(context, fromImage);
+  
+  VipsImage **localImages = (VipsImage **)vips_object_local_array(context, 10);
+  VipsImage *thumbnailImage = newThumbnailFromImage(localImages, fromImage, fromAngle, shrinkFactor);
+  
   if (!thumbnailImage) {
     fprintf(stderr, "ERROR - Unable to resize image\n");
+    g_object_unref(context);
     return;
   }
   
@@ -428,14 +449,36 @@ void processLine (char *lineBuffer, VipsObject *context) {
     // flush STDOUT immediately, so the application is not reliant on typical POSIX behaviour/
     // see http://stackoverflow.com/questions/1716296/why-does-printf-not-flush-after-the-call-unless-a-newline-is-in-the-format-strin
     fflush(stdout);
-    
+
     free(toFilePath);
   } else {
     fprintf(stderr, "ERROR - Unable to write file\n");
   }
+  g_object_unref(context);
 }
 
 int main (int argc, char **argv) {
+  //
+  // Suppress libVIPS warnings emitted via vips_warn(), by setting
+  // IM_WARNING to a non-empty value. This avoids a case where when decoding an image,
+  // warnings were emitted via STDOUT and they get to the calling process sooner than
+  // a successful result (regardless) could be written to STDERR.
+  //
+  // Since this otherwise affects successful operation of the program
+  // we will overwrite it if necessary.
+  //
+  if (setenv("IM_WARNING", "1", 1)) {
+    return 1;
+  }
+    
+  //
+  // Suppress libVIPS warnings emitted via vips_vwarn(), by setting
+  // VIPS_WARNING to a non-empty value. Same reason as above.
+  //
+  if (setenv("VIPS_WARNING", "1", 1)) {
+    return 1;
+  }
+    
   //
   // Start libVIPS at the beginning of the program so once it starts accepting input
   // it is actually ready.
@@ -451,25 +494,29 @@ int main (int argc, char **argv) {
   // Note: fgets blocks, without burning CPU. Looks like the best function on macOS;
   // other ones burn CPU when idle.
   //
-  char lineBuffer[4096];
+  static char lineBuffer[4096];
+  
   while (fgets(lineBuffer, 4096, stdin)) {
+    vips_cache_set_max_mem(CACHE_BYTES_ALLOWED_WITHIN_EACH_PASS);
+    vips_cache_set_max_files(CACHE_FILES_ALLOWED_WITHIN_EACH_PASS);
+    vips_cache_set_max(CACHE_OPS_ALLOWED_WITHIN_EACH_PASS);
+    
     //
     // Start the main process loop. Spin up a VipsObject in order for
     // downstream functions to hang all dependent objects on this context object,
     // so it can all be de-allocated in one go later on.
     //
-    VipsObject *context = VIPS_OBJECT(vips_image_new()); 
-    processLine(lineBuffer, context);
+    processLine(lineBuffer);
     vips_error_clear();
-    g_object_unref(context);
-    
+
     //
     // Empty cache but allow a higher high water mark within each pass,
     // if so desired. By default this is set to 0MB and 100MB respectively
     // but can be tweaked in the future.
     //
     vips_cache_set_max_mem(CACHE_BYTES_ALLOWED_BETWEEN_EACH_PASS);
-    vips_cache_set_max_mem(CACHE_BYTES_ALLOWED_WITHIN_EACH_PASS);
+    vips_cache_set_max_files(CACHE_FILES_ALLOWED_BETWEEN_EACH_PASS);
+    vips_cache_set_max(CACHE_OPS_ALLOWED_BETWEEN_EACH_PASS);
   }
   
   vips_shutdown();
